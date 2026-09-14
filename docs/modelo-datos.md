@@ -1,39 +1,60 @@
 # Modelo de datos inicial
 
-El MVP separa disponibilidad de turnos comprometidos.
-
 ## Entidades
 
-- `Usuario`: credenciales, rol y estado activo.
-- `Paciente`: datos mínimos de identificación y contacto; baja lógica mediante `activo`.
-- `Profesional`: médico asociado a la agenda.
-- `PlantillaDisponibilidad`: regla semanal recurrente con vigencia.
-- `ExcepcionAgenda`: apertura o cierre excepcional para una fecha/rango horario.
-- `Franja`: slot materializado reservable. Estados: `LIBRE`, `OCUPADA`, `BLOQUEADA`.
-- `Turno`: compromiso entre paciente, profesional y franja.
-- `TurnoEvento`: historial de creación, cancelación, reprogramación, atención y ausencia.
-- `Auditoria`: trazabilidad general de acciones críticas.
+### Usuario
+Opera el sistema y permitirá auditar acciones críticas.
 
-## Relaciones principales
+### Paciente
+Datos mínimos de identificación y contacto. La baja será lógica mediante `activo=false`.
 
-```text
-Profesional 1 --- N PlantillaDisponibilidad
-Profesional 1 --- N ExcepcionAgenda
-Profesional 1 --- N Franja
-Profesional 1 --- N Turno
-Paciente    1 --- N Turno
-Franja      1 --- N Turno (histórico; sólo uno puede estar activo)
-Turno       1 --- N TurnoEvento
-Usuario     1 --- N TurnoEvento
-Usuario     1 --- N Auditoria
-```
+### Profesional
+Profesional asociado a la agenda. El MVP opera con uno solo, pero el modelo conserva la relación para permitir evolución.
 
-## Concurrencia de reserva
+### PlantillaDisponibilidad
+Regla recurrente semanal con día, horario, duración y vigencia.
 
-La reserva no se resuelve sólo leyendo el estado de la franja. `FranjaRepository` incluye `findByIdForUpdate(...)` con bloqueo pesimista. El servicio de turnos deberá ejecutar la validación y creación dentro de una transacción: bloquear la franja, verificar que siga `LIBRE`, comprobar que no exista un turno activo y recién entonces crear el turno y pasar la franja a `OCUPADA`.
+### ExcepcionAgenda
+Apertura o cierre excepcional para una fecha o período concreto.
 
-Si dos usuarios intentan reservar la misma franja, sólo uno debe confirmar; el segundo recibirá un conflicto HTTP 409.
+### Franja
+Slot materializado de agenda. Tiene profesional, inicio, fin, estado y origen. Se utiliza `@Version` y, al reservar, bloqueo pesimista de fila.
 
-## Índices iniciales
+Estados iniciales:
 
-Se agregaron índices para búsquedas frecuentes por DNI/apellido, profesional+fecha de franja, profesional+inicio de turno y auditoría por entidad/fecha.
+- `LIBRE`
+- `OCUPADA`
+- `BLOQUEADA`
+
+### Turno
+Compromiso entre paciente, profesional y franja. Copia inicio y fin para mantener el compromiso temporal explícito.
+
+Estados iniciales:
+
+- `RESERVADO`
+- `CONFIRMADO`
+- `CANCELADO`
+- `ATENDIDO`
+- `AUSENTE`
+
+### TurnoEvento
+Registra creación, confirmación, cancelación, reprogramación, atención y ausencia. Permite conservar franja anterior/nueva cuando corresponda.
+
+### Auditoria
+Trazabilidad general de operaciones críticas.
+
+## Regla de doble reserva
+
+La prevención de doble reserva se resuelve en la capa de negocio dentro de una transacción:
+
+1. se recupera la `Franja` con `PESSIMISTIC_WRITE`;
+2. se verifica que su estado sea `LIBRE`;
+3. se verifica que no exista un turno activo asociado;
+4. se crea el turno;
+5. se cambia la franja a `OCUPADA`;
+6. se registra el evento de creación;
+7. se confirma la transacción.
+
+Si otra transacción intenta reservar la misma franja, deberá esperar el bloqueo y luego encontrará la franja ocupada, produciendo `409 Conflict`.
+
+No se utiliza una restricción única permanente entre `Turno` y `Franja`, porque una franja liberada por cancelación podrá volver a utilizarse manteniendo el turno cancelado como historial.
