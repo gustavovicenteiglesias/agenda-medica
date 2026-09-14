@@ -1,15 +1,15 @@
 # Agenda Médica
 
-Sistema web para gestión de agenda y turnos médicos del consultorio Dr. Salvador Amado.
+Sistema web para la gestión de agenda y turnos médicos.
 
 ## Stack
 
-- React + Vite + TypeScript
-- Spring Boot 3 + Java 21
-- MySQL 8
-- Spring Data JPA / Hibernate
-- Spring Security
-- OpenAPI / Swagger
+- Frontend: React + Vite + TypeScript
+- Backend: Spring Boot 3 + Java 21
+- Persistencia: Spring Data JPA / Hibernate
+- Base de datos: MySQL 8
+- Seguridad: Spring Security
+- API: REST + OpenAPI/Swagger
 
 ## Estructura
 
@@ -18,39 +18,36 @@ agenda-medica/
 ├── frontend/
 ├── backend/
 ├── docs/
+├── .gitignore
 └── README.md
 ```
 
-## Backend
+## Dominio inicial implementado
 
-```bash
-cd backend
-mvn spring-boot:run
-```
+El backend ya contiene las entidades y repositorios base del MVP:
 
-Variables de entorno opcionales:
+- Usuario
+- Paciente
+- Profesional
+- PlantillaDisponibilidad
+- ExcepcionAgenda
+- Franja
+- Turno
+- TurnoEvento
+- Auditoria
 
-```text
-DB_URL=jdbc:mysql://localhost:3306/agenda_medica
-DB_USER=root
-DB_PASSWORD=root
-PORT=8080
-```
+También se agregó bloqueo pesimista de `Franja` para preparar la prevención de doble reserva en el servicio transaccional de turnos.
 
-Swagger quedará disponible en `/swagger-ui.html`.
+## Próximo paso
 
-## Frontend
+Implementar el primer flujo vertical completo:
 
-```bash
-cd frontend
-npm install
-npm run dev
-```
+1. ABM/búsqueda de pacientes.
+2. Consulta de franjas disponibles.
+3. Creación transaccional de turno.
+4. Respuesta HTTP 409 ante intento de doble reserva.
+5. Exposición de endpoints REST para integrar el frontend.
 
-Por defecto Vite inicia en `http://localhost:5173`.
+## Alcance del MVP
 
-## MVP
-
-El alcance inicial incluye autenticación, pacientes, disponibilidad semanal, excepciones de agenda, franjas, creación/cancelación/reprogramación de turnos, estados de atención y auditoría mínima.
-
-La arquitectura detallada está documentada en `docs/arquitectura.md`.
+El MVP se concentra en pacientes, disponibilidad, agenda, asignación/cancelación/reprogramación de turnos, excepciones y auditoría mínima. No incluye historia clínica, facturación, WhatsApp ni multi-profesional operativo en esta etapa.
