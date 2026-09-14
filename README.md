@@ -8,7 +8,7 @@ Sistema web para la gestión de agenda y turnos médicos.
 - Backend: Spring Boot 3 + Java 21
 - Persistencia: Spring Data JPA / Hibernate
 - Base de datos: MySQL 8
-- Seguridad: Spring Security
+- Seguridad: Spring Security (JWT pendiente)
 - API: REST + OpenAPI/Swagger
 
 ## Estructura
@@ -22,9 +22,9 @@ agenda-medica/
 └── README.md
 ```
 
-## Dominio inicial implementado
+## Dominio inicial
 
-El backend ya contiene las entidades y repositorios base del MVP:
+El backend contiene las entidades y repositorios base del MVP:
 
 - Usuario
 - Paciente
@@ -36,17 +36,40 @@ El backend ya contiene las entidades y repositorios base del MVP:
 - TurnoEvento
 - Auditoria
 
-También se agregó bloqueo pesimista de `Franja` para preparar la prevención de doble reserva en el servicio transaccional de turnos.
+## Primer flujo vertical implementado
 
-## Próximo paso
+Ya está disponible el circuito inicial:
 
-Implementar el primer flujo vertical completo:
+1. Crear y buscar pacientes.
+2. Consultar la agenda diaria de un profesional.
+3. Crear un turno sobre una franja libre.
+4. Bloquear la franja durante la confirmación con `PESSIMISTIC_WRITE`.
+5. Revalidar disponibilidad dentro de la transacción.
+6. Marcar la franja como `OCUPADA`.
+7. Registrar un `TurnoEvento` de creación.
+8. Responder `409 Conflict` si la franja dejó de estar disponible.
 
-1. ABM/búsqueda de pacientes.
-2. Consulta de franjas disponibles.
-3. Creación transaccional de turno.
-4. Respuesta HTTP 409 ante intento de doble reserva.
-5. Exposición de endpoints REST para integrar el frontend.
+Endpoints principales:
+
+```text
+GET  /api/pacientes?query=
+POST /api/pacientes
+GET  /api/agenda?profesionalId=1&fecha=2026-09-16
+POST /api/turnos
+GET  /api/turnos/{id}
+```
+
+Swagger queda disponible en `/swagger-ui.html` al levantar el backend.
+
+> Seguridad: durante esta etapa los endpoints se encuentran abiertos para facilitar las pruebas del flujo inicial. La autenticación JWT y los roles ADMIN, RECEPCION y MEDICO se implementarán antes de cerrar el MVP.
+
+## Próximos pasos
+
+- Generación/materialización de franjas desde la plantilla semanal.
+- Cancelación de turnos y liberación de franjas.
+- Reprogramación transaccional con historial.
+- Login JWT y autorización por roles.
+- Integración del frontend React con la agenda real.
 
 ## Alcance del MVP
 
