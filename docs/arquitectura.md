@@ -1,43 +1,69 @@
-# Arquitectura
+# Arquitectura inicial
 
-## Visión general
+## Stack
+
+- Frontend: React + Vite + TypeScript
+- Backend: Spring Boot 3 + Java 21
+- Persistencia: MySQL 8
+- ORM: Spring Data JPA / Hibernate
+- Seguridad: Spring Security + JWT (JWT pendiente de implementar)
+- API: REST + OpenAPI/Swagger
+
+## Módulos del MVP
+
+1. Autenticación y usuarios.
+2. Pacientes.
+3. Configuración de disponibilidad semanal.
+4. Excepciones y bloqueos de agenda.
+5. Franjas horarias.
+6. Turnos: creación, cancelación y reprogramación.
+7. Estados de atención: reservado, cancelado, atendido y ausente.
+8. Auditoría mínima.
+
+## Entidades
+
+- Usuario
+- Paciente
+- Profesional
+- PlantillaDisponibilidad
+- ExcepcionAgenda
+- Franja
+- Turno
+- TurnoEvento
+- Auditoria
+
+## Flujo vertical implementado
+
+El primer caso de uso operativo implementado es la creación de un turno:
 
 ```text
-React + TypeScript
-       |
-       | HTTP / JSON
-       v
-Spring Boot 3 / Java 21
-       |
-       | JPA / Hibernate
-       v
-MySQL 8
+React (futuro)
+   |
+   v
+POST /api/turnos
+   |
+   v
+TurnoController
+   |
+   v
+TurnoService @Transactional
+   |---- obtiene Paciente activo
+   |---- bloquea Franja con PESSIMISTIC_WRITE
+   |---- revalida estado LIBRE y fecha futura
+   |---- verifica que no exista turno activo
+   |---- crea Turno RESERVADO
+   |---- cambia Franja a OCUPADA
+   |---- registra TurnoEvento CREACION
+   v
+MySQL
 ```
 
-## Backend
+Si la franja fue ocupada antes de confirmar, el servicio devuelve `409 Conflict` y la transacción no crea un segundo turno.
 
-Organización inicial:
+## Criterio de diseño de agenda
 
-```text
-ar.com.agendamedica
-├── domain
-│   ├── entity
-│   └── enums
-├── repository
-├── service
-├── controller
-├── dto
-├── security
-├── exception
-└── config
-```
+En el MVP se materializarán franjas futuras en MySQL para simplificar la consulta de agenda y el control de concurrencia. La siguiente iteración debe generar esas franjas a partir de `PlantillaDisponibilidad`, respetando excepciones y sin alterar turnos ya comprometidos.
 
-El dominio separa las reglas recurrentes de agenda (`PlantillaDisponibilidad`), las excepciones (`ExcepcionAgenda`), las franjas concretas (`Franja`) y los compromisos asumidos (`Turno`). `TurnoEvento` conserva la trazabilidad específica de cada turno y `Auditoria` registra operaciones críticas generales.
+## Seguridad
 
-## Concurrencia
-
-La asignación de turnos será transaccional. La franja se recuperará con bloqueo pesimista antes de confirmar la reserva. Esto evita que dos recepcionistas confirmen simultáneamente el mismo horario.
-
-## Frontend
-
-React se encargará de la agenda visual, formularios, búsqueda de pacientes y consumo de la API REST. La lógica de negocio y validación definitiva permanece en el backend.
+Spring Security ya forma parte del proyecto, pero mientras se construye el primer flujo vertical la API está temporalmente abierta. Esta decisión es sólo de desarrollo. La autenticación JWT y la autorización por roles `ADMIN`, `RECEPCION` y `MEDICO` siguen siendo requisito del MVP.
