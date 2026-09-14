@@ -1,37 +1,43 @@
-# Arquitectura inicial
+# Arquitectura
 
-## Stack
+## Visión general
 
-- Frontend: React + Vite + TypeScript
-- Backend: Spring Boot 3 + Java 21
-- Persistencia: MySQL 8
-- ORM: Spring Data JPA / Hibernate
-- Seguridad: Spring Security + JWT
-- API: REST + OpenAPI/Swagger
+```text
+React + TypeScript
+       |
+       | HTTP / JSON
+       v
+Spring Boot 3 / Java 21
+       |
+       | JPA / Hibernate
+       v
+MySQL 8
+```
 
-## Módulos del MVP
+## Backend
 
-1. Autenticación y usuarios.
-2. Pacientes.
-3. Configuración de disponibilidad semanal.
-4. Excepciones y bloqueos de agenda.
-5. Franjas horarias.
-6. Turnos: creación, cancelación y reprogramación.
-7. Estados de atención: reservado, cancelado, atendido y ausente.
-8. Auditoría mínima.
+Organización inicial:
 
-## Entidades previstas
+```text
+ar.com.agendamedica
+├── domain
+│   ├── entity
+│   └── enums
+├── repository
+├── service
+├── controller
+├── dto
+├── security
+├── exception
+└── config
+```
 
-- Usuario
-- Paciente
-- Profesional
-- PlantillaDisponibilidad
-- ExcepcionAgenda
-- Franja
-- Turno
-- TurnoEvento
-- Auditoria
+El dominio separa las reglas recurrentes de agenda (`PlantillaDisponibilidad`), las excepciones (`ExcepcionAgenda`), las franjas concretas (`Franja`) y los compromisos asumidos (`Turno`). `TurnoEvento` conserva la trazabilidad específica de cada turno y `Auditoria` registra operaciones críticas generales.
 
-## Criterio de diseño
+## Concurrencia
 
-En el MVP se materializarán franjas futuras en MySQL para simplificar la consulta de agenda y el control de concurrencia. La reserva de una franja se confirmará en una transacción y deberá impedir doble asignación.
+La asignación de turnos será transaccional. La franja se recuperará con bloqueo pesimista antes de confirmar la reserva. Esto evita que dos recepcionistas confirmen simultáneamente el mismo horario.
+
+## Frontend
+
+React se encargará de la agenda visual, formularios, búsqueda de pacientes y consumo de la API REST. La lógica de negocio y validación definitiva permanece en el backend.
