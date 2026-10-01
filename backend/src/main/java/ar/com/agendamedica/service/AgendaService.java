@@ -4,7 +4,9 @@ import ar.com.agendamedica.domain.entity.ExcepcionAgenda;
 import ar.com.agendamedica.domain.entity.Franja;
 import ar.com.agendamedica.domain.entity.PlantillaDisponibilidad;
 import ar.com.agendamedica.domain.entity.Profesional;
+import ar.com.agendamedica.domain.entity.Turno;
 import ar.com.agendamedica.domain.enums.EstadoFranja;
+import ar.com.agendamedica.domain.enums.EstadoTurno;
 import ar.com.agendamedica.domain.enums.TipoExcepcionAgenda;
 import ar.com.agendamedica.dto.*;
 import ar.com.agendamedica.exception.BadRequestException;
@@ -13,6 +15,7 @@ import ar.com.agendamedica.repository.ExcepcionAgendaRepository;
 import ar.com.agendamedica.repository.FranjaRepository;
 import ar.com.agendamedica.repository.PlantillaDisponibilidadRepository;
 import ar.com.agendamedica.repository.ProfesionalRepository;
+import ar.com.agendamedica.repository.TurnoRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,33 +23,40 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.List;
 
 @Service
 public class AgendaService {
+    private static final List<EstadoTurno> ESTADOS_ACTIVOS =
+            List.of(EstadoTurno.RESERVADO, EstadoTurno.CONFIRMADO);
+
     private final FranjaRepository franjaRepository;
     private final ProfesionalRepository profesionalRepository;
     private final PlantillaDisponibilidadRepository plantillaRepository;
     private final ExcepcionAgendaRepository excepcionRepository;
+    private final TurnoRepository turnoRepository;
+    private final AuditoriaService auditoriaService;
 
     public AgendaService(FranjaRepository franjaRepository,
                          ProfesionalRepository profesionalRepository,
                          PlantillaDisponibilidadRepository plantillaRepository,
-                         ExcepcionAgendaRepository excepcionRepository) {
+                         ExcepcionAgendaRepository excepcionRepository,
+                         TurnoRepository turnoRepository,
+                         AuditoriaService auditoriaService) {
         this.franjaRepository = franjaRepository;
         this.profesionalRepository = profesionalRepository;
         this.plantillaRepository = plantillaRepository;
         this.excepcionRepository = excepcionRepository;
+        this.turnoRepository = turnoRepository;
+        this.auditoriaService = auditoriaService;
     }
 
     @Transactional(readOnly = true)
     public List<FranjaResponse> agendaDiaria(Long profesionalId, LocalDate fecha) {
         obtenerProfesional(profesionalId);
 
-        return franjaRepository.findByProfesionalIdAndInicioBetweenOrderByInicioAsc(
-                        profesionalId,
-                        fecha.atStartOfDay(),
-                        fecha.plusDays(1).atStartOfDay().minusNanos(1))
+        return franjasDelDia(profesionalId, fecha)
                 .stream()
                 .map(FranjaResponse::from)
                 .toList();
@@ -72,7 +82,15 @@ public class AgendaService {
         plantilla.setVigenciaDesde(request.vigenciaDesde());
         plantilla.setVigenciaHasta(request.vigenciaHasta());
 
-        return PlantillaDisponibilidadResponse.from(plantillaRepository.save(plantilla));
+        plantilla = plantillaRepository.save(plantilla);
+        auditoriaService.registrar(
+                "CREAR_PLANTILLA",
+                "PlantillaDisponibilidad",
+                plantilla.getId(),
+                "profesionalId=" + profesional.getId() + ", dia=" + plantilla.getDiaSemana()
+        );
+
+        return PlantillaDisponibilidadResponse.from(plantilla);
     }
 
     @Transactional
@@ -137,7 +155,136 @@ public class AgendaService {
             }
         }
 
+        auditoriaService.registrar(
+                "GENERAR_FRANJAS",
+                "Profesional",
+                profesional.getId(),
+                "desde=" + request.desde() + ", hasta=" + request.hasta() + ", creadas=" + creadas
+        );
+
         return new GenerarFranjasResponse(creadas, existentes, omitidasPorCierre);
+    }
+
+    @Transactional
+    public ExcepcionAgendaResponse crearExcepcion(ExcepcionAgendaRequest request) {
+        Profesional profesional = obtenerProfesional(request.profesionalId());
+
+        if (request.fecha().isBefore(LocalDate.now())) {
+            throw new BadRequestException("No se pueden crear excepciones en fechas pasadas");
+        }
+
+        validarRangoExcepcion(request);
+
+        ExcepcionAgenda excepcion = new ExcepcionAgenda();
+        excepcion.setProfesional(profesional);
+        excepcion.setFecha(request.fecha());
+        excepcion.setHoraInicio(request.horaInicio());
+        excepcion.setHoraFin(request.horaFin());
+        excepcion.setTipo(request.tipo());
+        excepcion.setMotivo(normalize(request.motivo()));
+        excepcion = excepcionRepository.save(excepcion);
+
+        int franjasCreadas = 0;
+        int franjasBloqueadas = 0;
+        List<Long> turnosAfectados = new ArrayList<>();
+
+        if (request.tipo() == TipoExcepcionAgenda.CIERRE) {
+            List<Franja> franjas = franjasDelDia(profesional.getId(), request.fecha());
+
+            for (Franja franja : franjas) {
+                if (!solapa(request, franja.getInicio().toLocalTime(), franja.getFin().toLocalTime())) {
+                    continue;
+                }
+
+                if (franja.getEstado() == EstadoFranja.LIBRE && !franja.getInicio().isBefore(LocalDateTime.now())) {
+                    franja.setEstado(EstadoFranja.BLOQUEADA);
+                    franjaRepository.save(franja);
+                    franjasBloqueadas++;
+                }
+            }
+
+            turnosAfectados = turnoRepository.findByProfesionalIdAndInicioBetweenOrderByInicioAsc(
+                            profesional.getId(),
+                            request.fecha().atStartOfDay(),
+                            request.fecha().plusDays(1).atStartOfDay().minusNanos(1))
+                    .stream()
+                    .filter(t -> ESTADOS_ACTIVOS.contains(t.getEstado()))
+                    .filter(t -> solapa(
+                            request,
+                            t.getInicio().toLocalTime(),
+                            t.getFin().toLocalTime()))
+                    .map(Turno::getId)
+                    .toList();
+        } else {
+            if (request.horaInicio() == null || request.horaFin() == null || request.duracionMin() == null) {
+                throw new BadRequestException(
+                        "Una apertura requiere horaInicio, horaFin y duracionMin");
+            }
+
+            LocalTime hora = request.horaInicio();
+            while (!hora.plusMinutes(request.duracionMin()).isAfter(request.horaFin())) {
+                LocalDateTime inicio = LocalDateTime.of(request.fecha(), hora);
+                LocalDateTime fin = inicio.plusMinutes(request.duracionMin());
+
+                if (!inicio.isBefore(LocalDateTime.now())) {
+                    Franja existente = franjasDelDia(profesional.getId(), request.fecha())
+                            .stream()
+                            .filter(f -> f.getInicio().equals(inicio))
+                            .findFirst()
+                            .orElse(null);
+
+                    if (existente == null) {
+                        Franja franja = new Franja();
+                        franja.setProfesional(profesional);
+                        franja.setInicio(inicio);
+                        franja.setFin(fin);
+                        franja.setEstado(EstadoFranja.LIBRE);
+                        franja.setOrigen("EXCEPCION_APERTURA");
+                        franjaRepository.save(franja);
+                        franjasCreadas++;
+                    } else if (existente.getEstado() == EstadoFranja.BLOQUEADA) {
+                        existente.setEstado(EstadoFranja.LIBRE);
+                        existente.setOrigen("EXCEPCION_APERTURA");
+                        franjaRepository.save(existente);
+                        franjasCreadas++;
+                    }
+                }
+
+                hora = hora.plusMinutes(request.duracionMin());
+            }
+        }
+
+        auditoriaService.registrar(
+                "CREAR_EXCEPCION_AGENDA",
+                "ExcepcionAgenda",
+                excepcion.getId(),
+                "tipo=" + excepcion.getTipo()
+                        + ", fecha=" + excepcion.getFecha()
+                        + ", turnosAfectados=" + turnosAfectados
+        );
+
+        return ExcepcionAgendaResponse.from(
+                excepcion,
+                franjasCreadas,
+                franjasBloqueadas,
+                turnosAfectados
+        );
+    }
+
+    private void validarRangoExcepcion(ExcepcionAgendaRequest request) {
+        if ((request.horaInicio() == null) != (request.horaFin() == null)) {
+            throw new BadRequestException("horaInicio y horaFin deben informarse juntas");
+        }
+        if (request.horaInicio() != null && !request.horaFin().isAfter(request.horaInicio())) {
+            throw new BadRequestException("La hora de fin debe ser posterior a la hora de inicio");
+        }
+    }
+
+    private boolean solapa(ExcepcionAgendaRequest request, LocalTime inicio, LocalTime fin) {
+        if (request.horaInicio() == null || request.horaFin() == null) {
+            return true;
+        }
+        return inicio.isBefore(request.horaFin()) && fin.isAfter(request.horaInicio());
     }
 
     private boolean estaCerrada(List<ExcepcionAgenda> excepciones,
@@ -155,9 +302,20 @@ public class AgendaService {
                 });
     }
 
+    private List<Franja> franjasDelDia(Long profesionalId, LocalDate fecha) {
+        return franjaRepository.findByProfesionalIdAndInicioBetweenOrderByInicioAsc(
+                profesionalId,
+                fecha.atStartOfDay(),
+                fecha.plusDays(1).atStartOfDay().minusNanos(1));
+    }
+
     private Profesional obtenerProfesional(Long id) {
         return profesionalRepository.findById(id)
                 .filter(Profesional::isActivo)
                 .orElseThrow(() -> new ResourceNotFoundException("Profesional activo no encontrado: " + id));
+    }
+
+    private String normalize(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 }
