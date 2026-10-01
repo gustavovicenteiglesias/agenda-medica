@@ -16,9 +16,12 @@ Paciente
    |
    v
 Turno ----> TurnoEvento
+   |              |
+   v              v
+Franja         Auditoria
+   ^
    |
-   v
-Franja <---- PlantillaDisponibilidad
+PlantillaDisponibilidad
    ^
    |
 ExcepcionAgenda
@@ -26,33 +29,21 @@ ExcepcionAgenda
 
 Las franjas se materializan en MySQL. Una plantilla recurrente genera slots futuros y el proceso es idempotente.
 
-## Reserva
+## Reserva, cancelación y reprogramación
 
-```text
-POST /api/turnos
-      |
-      v
-TurnoService @Transactional
-      |
-      +-- bloquea Franja con PESSIMISTIC_WRITE
-      +-- valida que sea futura y LIBRE
-      +-- verifica que no exista turno activo
-      +-- crea Turno RESERVADO
-      +-- cambia Franja a OCUPADA
-      +-- registra TurnoEvento CREACION
-```
+La reserva usa `PESSIMISTIC_WRITE` y valida disponibilidad dentro de la transacción. La cancelación libera la franja. La reprogramación libera la anterior, ocupa la nueva y registra ambas en `TurnoEvento`.
 
-## Cancelación
+## Excepciones
 
-La cancelación cambia el turno a `CANCELADO`, libera la franja y registra un evento de cancelación con motivo.
+Un `CIERRE` bloquea solamente franjas libres y conserva los turnos activos, devolviendo sus IDs para tratamiento manual. Una `APERTURA` puede crear franjas excepcionales o reabrir franjas bloqueadas.
 
-## Reprogramación
+## Estados finales
 
-La reprogramación bloquea la franja actual y la nueva, valida la nueva disponibilidad, libera la anterior, ocupa la nueva y registra `franjaAnteriorId` y `franjaNuevaId` en `TurnoEvento`.
+`ATENDIDO` y `AUSENTE` sólo se permiten desde la hora de inicio del turno. Ambas operaciones generan evento y auditoría.
 
-## Generación de agenda
+## Auditoría
 
-`AgendaService` toma las plantillas vigentes dentro de un rango de hasta 90 días y genera franjas por duración. No duplica horarios existentes y omite franjas alcanzadas por excepciones de tipo `CIERRE`.
+Las operaciones críticas crean registros en `Auditoria`. Mientras no exista JWT, `usuario_id` permanece nulo; al incorporar autenticación el mismo servicio podrá asociar el usuario autenticado.
 
 ## Seguridad
 
