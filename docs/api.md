@@ -15,32 +15,23 @@ Base path: `/api`
 - `GET /api/agenda?profesionalId={id}&fecha=YYYY-MM-DD`
 - `POST /api/agenda/plantillas`
 - `POST /api/agenda/generar-franjas`
+- `POST /api/agenda/excepciones`
+- `POST /api/agenda/bloqueos`
 
-Ejemplo de plantilla:
-
-```json
-{
-  "profesionalId": 1,
-  "diaSemana": "MONDAY",
-  "horaInicio": "09:00",
-  "horaFin": "13:00",
-  "duracionMin": 30,
-  "vigenciaDesde": "2026-10-01",
-  "vigenciaHasta": null
-}
-```
-
-Ejemplo de generación:
+Cierre parcial:
 
 ```json
 {
   "profesionalId": 1,
-  "desde": "2026-10-01",
-  "hasta": "2026-11-30"
+  "fecha": "2026-10-10",
+  "horaInicio": "10:00",
+  "horaFin": "12:00",
+  "tipo": "CIERRE",
+  "motivo": "Reunión"
 }
 ```
 
-La generación es idempotente: no duplica una franja ya existente para el mismo profesional e inicio. Los cierres registrados como excepción se respetan durante la generación.
+Una apertura requiere además `duracionMin`. Un cierre sin horas representa el día completo. Las franjas libres alcanzadas quedan `BLOQUEADA`; los turnos activos no se eliminan y sus IDs se devuelven en `turnosAfectados`.
 
 ## Turnos
 
@@ -48,35 +39,18 @@ La generación es idempotente: no duplica una franja ya existente para el mismo 
 - `GET /api/turnos/{id}`
 - `POST /api/turnos/{id}/cancelacion`
 - `POST /api/turnos/{id}/reprogramacion`
+- `POST /api/turnos/{id}/atencion`
+- `POST /api/turnos/{id}/ausencia`
 
-Crear turno:
-
-```json
-{
-  "pacienteId": 1,
-  "franjaId": 10,
-  "motivoConsulta": "Control"
-}
-```
-
-Cancelar:
-
-```json
-{
-  "motivo": "Paciente avisó que no puede asistir"
-}
-```
-
-Reprogramar:
-
-```json
-{
-  "franjaId": 18,
-  "motivo": "Cambio solicitado por el paciente"
-}
-```
+Los estados `ATENDIDO` y `AUSENTE` sólo pueden registrarse cuando llegó o pasó la hora de inicio.
 
 La creación y la reprogramación bloquean la franja con `PESSIMISTIC_WRITE` y revalidan disponibilidad dentro de la transacción. Si otro usuario tomó la franja, la API responde `409 Conflict`.
+
+## Auditoría
+
+- `GET /api/auditoria` devuelve las últimas 100 operaciones.
+
+Actualmente se auditan creación/cancelación/reprogramación de turnos, atención/ausencia, creación de plantillas, generación de franjas y excepciones de agenda. El usuario queda nulo hasta incorporar autenticación JWT.
 
 ## Errores
 
