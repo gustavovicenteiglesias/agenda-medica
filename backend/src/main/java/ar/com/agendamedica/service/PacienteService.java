@@ -21,16 +21,13 @@ public class PacienteService {
 
     @Transactional
     public PacienteResponse crear(PacienteRequest request) {
-        pacienteRepository.findByDni(request.dni()).ifPresent(p -> {
+        pacienteRepository.findByDni(request.dni().trim()).ifPresent(p -> {
             throw new ConflictException("Ya existe un paciente con DNI " + request.dni());
         });
 
         Paciente paciente = new Paciente();
-        paciente.setDni(request.dni().trim());
-        paciente.setNombre(request.nombre().trim());
-        paciente.setApellido(request.apellido().trim());
-        paciente.setTelefono(normalize(request.telefono()));
-        paciente.setEmail(normalize(request.email()));
+        aplicarDatos(paciente, request);
+        paciente.setActivo(true);
         return PacienteResponse.from(pacienteRepository.save(paciente));
     }
 
@@ -49,18 +46,59 @@ public class PacienteService {
         if (exacto.isPresent() && exacto.get().isActivo()) {
             return List.of(PacienteResponse.from(exacto.get()));
         }
+
         return pacienteRepository.findTop20ByActivoTrueAndApellidoContainingIgnoreCaseOrderByApellidoAscNombreAsc(q)
-                .stream().map(PacienteResponse::from).toList();
+                .stream()
+                .map(PacienteResponse::from)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public PacienteResponse obtener(Long id) {
+        return PacienteResponse.from(obtenerEntidad(id));
+    }
+
+    @Transactional
+    public PacienteResponse actualizar(Long id, PacienteRequest request) {
+        Paciente paciente = obtenerEntidad(id);
+
+        pacienteRepository.findByDni(request.dni().trim())
+                .filter(otro -> !otro.getId().equals(id))
+                .ifPresent(otro -> {
+                    throw new ConflictException("Ya existe otro paciente con DNI " + request.dni());
+                });
+
+        aplicarDatos(paciente, request);
+        return PacienteResponse.from(pacienteRepository.save(paciente));
+    }
+
+    @Transactional
+    public void desactivar(Long id) {
+        Paciente paciente = obtenerEntidad(id);
+        paciente.setActivo(false);
+        pacienteRepository.save(paciente);
     }
 
     @Transactional(readOnly = true)
     public Paciente obtenerEntidadActiva(Long id) {
-        Paciente paciente = pacienteRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Paciente no encontrado: " + id));
+        Paciente paciente = obtenerEntidad(id);
         if (!paciente.isActivo()) {
             throw new ConflictException("El paciente está inactivo");
         }
         return paciente;
+    }
+
+    private Paciente obtenerEntidad(Long id) {
+        return pacienteRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Paciente no encontrado: " + id));
+    }
+
+    private void aplicarDatos(Paciente paciente, PacienteRequest request) {
+        paciente.setDni(request.dni().trim());
+        paciente.setNombre(request.nombre().trim());
+        paciente.setApellido(request.apellido().trim());
+        paciente.setTelefono(normalize(request.telefono()));
+        paciente.setEmail(normalize(request.email()));
     }
 
     private String normalize(String value) {
