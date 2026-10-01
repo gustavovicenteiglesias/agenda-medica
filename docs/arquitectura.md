@@ -1,4 +1,4 @@
-# Arquitectura inicial
+# Arquitectura
 
 ## Stack
 
@@ -6,64 +6,58 @@
 - Backend: Spring Boot 3 + Java 21
 - Persistencia: MySQL 8
 - ORM: Spring Data JPA / Hibernate
-- Seguridad: Spring Security + JWT (JWT pendiente de implementar)
+- Seguridad: Spring Security; JWT pendiente
 - API: REST + OpenAPI/Swagger
 
-## Módulos del MVP
-
-1. Autenticación y usuarios.
-2. Pacientes.
-3. Configuración de disponibilidad semanal.
-4. Excepciones y bloqueos de agenda.
-5. Franjas horarias.
-6. Turnos: creación, cancelación y reprogramación.
-7. Estados de atención: reservado, cancelado, atendido y ausente.
-8. Auditoría mínima.
-
-## Entidades
-
-- Usuario
-- Paciente
-- Profesional
-- PlantillaDisponibilidad
-- ExcepcionAgenda
-- Franja
-- Turno
-- TurnoEvento
-- Auditoria
-
-## Flujo vertical implementado
-
-El primer caso de uso operativo implementado es la creación de un turno:
+## Núcleo implementado
 
 ```text
-React (futuro)
+Paciente
    |
    v
-POST /api/turnos
+Turno ----> TurnoEvento
    |
    v
-TurnoController
+Franja <---- PlantillaDisponibilidad
+   ^
    |
-   v
-TurnoService @Transactional
-   |---- obtiene Paciente activo
-   |---- bloquea Franja con PESSIMISTIC_WRITE
-   |---- revalida estado LIBRE y fecha futura
-   |---- verifica que no exista turno activo
-   |---- crea Turno RESERVADO
-   |---- cambia Franja a OCUPADA
-   |---- registra TurnoEvento CREACION
-   v
-MySQL
+ExcepcionAgenda
 ```
 
-Si la franja fue ocupada antes de confirmar, el servicio devuelve `409 Conflict` y la transacción no crea un segundo turno.
+Las franjas se materializan en MySQL. Una plantilla recurrente genera slots futuros y el proceso es idempotente.
 
-## Criterio de diseño de agenda
+## Reserva
 
-En el MVP se materializarán franjas futuras en MySQL para simplificar la consulta de agenda y el control de concurrencia. La siguiente iteración debe generar esas franjas a partir de `PlantillaDisponibilidad`, respetando excepciones y sin alterar turnos ya comprometidos.
+```text
+POST /api/turnos
+      |
+      v
+TurnoService @Transactional
+      |
+      +-- bloquea Franja con PESSIMISTIC_WRITE
+      +-- valida que sea futura y LIBRE
+      +-- verifica que no exista turno activo
+      +-- crea Turno RESERVADO
+      +-- cambia Franja a OCUPADA
+      +-- registra TurnoEvento CREACION
+```
+
+## Cancelación
+
+La cancelación cambia el turno a `CANCELADO`, libera la franja y registra un evento de cancelación con motivo.
+
+## Reprogramación
+
+La reprogramación bloquea la franja actual y la nueva, valida la nueva disponibilidad, libera la anterior, ocupa la nueva y registra `franjaAnteriorId` y `franjaNuevaId` en `TurnoEvento`.
+
+## Generación de agenda
+
+`AgendaService` toma las plantillas vigentes dentro de un rango de hasta 90 días y genera franjas por duración. No duplica horarios existentes y omite franjas alcanzadas por excepciones de tipo `CIERRE`.
 
 ## Seguridad
 
-Spring Security ya forma parte del proyecto, pero mientras se construye el primer flujo vertical la API está temporalmente abierta. Esta decisión es sólo de desarrollo. La autenticación JWT y la autorización por roles `ADMIN`, `RECEPCION` y `MEDICO` siguen siendo requisito del MVP.
+La API continúa abierta sólo durante desarrollo. Antes del cierre del MVP se deben implementar autenticación JWT y autorización por roles `ADMIN`, `RECEPCION` y `MEDICO`.
+
+## CI
+
+GitHub Actions compila el backend con Java 21/Maven y ejecuta el build del frontend con Node 20.
