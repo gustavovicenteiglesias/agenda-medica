@@ -42,4 +42,14 @@ public class TurnoController {
             @Valid @RequestBody ReprogramarTurnoRequest request) {
         return turnoService.reprogramar(id, request);
     }
+
+    @PostMapping("/{id}/atencion")
+    public TurnoResponse marcarAtendido(@PathVariable Long id) {
+        return turnoService.marcarAtendido(id);
+    }
+
+    @PostMapping("/{id}/ausencia")
+    public TurnoResponse marcarAusente(@PathVariable Long id) {
+        return turnoService.marcarAusente(id);
+    }
 }
