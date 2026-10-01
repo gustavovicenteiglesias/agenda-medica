@@ -166,6 +166,19 @@ public class AgendaService {
     }
 
     @Transactional
+    public ExcepcionAgendaResponse crearBloqueo(BloqueoAgendaRequest request) {
+        return crearExcepcion(new ExcepcionAgendaRequest(
+                request.profesionalId(),
+                request.fecha(),
+                request.horaInicio(),
+                request.horaFin(),
+                TipoExcepcionAgenda.CIERRE,
+                null,
+                request.motivo()
+        ));
+    }
+
+    @Transactional
     public ExcepcionAgendaResponse crearExcepcion(ExcepcionAgendaRequest request) {
         Profesional profesional = obtenerProfesional(request.profesionalId());
 
