@@ -23,9 +23,27 @@ public class PacienteController {
         return pacienteService.buscar(query);
     }
 
+    @GetMapping("/{id}")
+    public PacienteResponse obtener(@PathVariable Long id) {
+        return pacienteService.obtener(id);
+    }
+
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public PacienteResponse crear(@Valid @RequestBody PacienteRequest request) {
         return pacienteService.crear(request);
+    }
+
+    @PutMapping("/{id}")
+    public PacienteResponse actualizar(
+            @PathVariable Long id,
+            @Valid @RequestBody PacienteRequest request) {
+        return pacienteService.actualizar(id, request);
+    }
+
+    @DeleteMapping("/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void desactivar(@PathVariable Long id) {
+        pacienteService.desactivar(id);
     }
 }
