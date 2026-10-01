@@ -32,22 +32,24 @@ public class TurnoService {
     private final TurnoEventoRepository turnoEventoRepository;
     private final FranjaRepository franjaRepository;
     private final PacienteService pacienteService;
+    private final AuditoriaService auditoriaService;
 
     public TurnoService(TurnoRepository turnoRepository,
                         TurnoEventoRepository turnoEventoRepository,
                         FranjaRepository franjaRepository,
-                        PacienteService pacienteService) {
+                        PacienteService pacienteService,
+                        AuditoriaService auditoriaService) {
         this.turnoRepository = turnoRepository;
         this.turnoEventoRepository = turnoEventoRepository;
         this.franjaRepository = franjaRepository;
         this.pacienteService = pacienteService;
+        this.auditoriaService = auditoriaService;
     }
 
     @Transactional
     public TurnoResponse crear(CrearTurnoRequest request) {
         Paciente paciente = pacienteService.obtenerEntidadActiva(request.pacienteId());
         Franja franja = bloquearFranja(request.franjaId());
-
         validarFranjaDisponible(franja);
 
         Turno turno = new Turno();
@@ -64,6 +66,13 @@ public class TurnoService {
         franjaRepository.save(franja);
 
         registrarEvento(turno, TipoEventoTurno.CREACION, null, franja.getId(), "Turno creado");
+        auditoriaService.registrar(
+                "CREAR_TURNO",
+                "Turno",
+                turno.getId(),
+                "pacienteId=" + paciente.getId() + ", franjaId=" + franja.getId()
+        );
+
         return TurnoResponse.from(turno);
     }
 
@@ -85,6 +94,12 @@ public class TurnoService {
                 franja.getId(),
                 null,
                 "Cancelación: " + request.motivo().trim()
+        );
+        auditoriaService.registrar(
+                "CANCELAR_TURNO",
+                "Turno",
+                turno.getId(),
+                "franjaLiberadaId=" + franja.getId() + ", motivo=" + request.motivo().trim()
         );
 
         return TurnoResponse.from(turno);
@@ -123,13 +138,61 @@ public class TurnoService {
                 franjaNueva.getId(),
                 detalle == null ? "Turno reprogramado" : "Reprogramación: " + detalle
         );
+        auditoriaService.registrar(
+                "REPROGRAMAR_TURNO",
+                "Turno",
+                turno.getId(),
+                "franjaAnteriorId=" + franjaAnteriorId + ", franjaNuevaId=" + franjaNueva.getId()
+        );
 
         return TurnoResponse.from(turno);
+    }
+
+    @Transactional
+    public TurnoResponse marcarAtendido(Long id) {
+        return cambiarEstadoFinal(id, EstadoTurno.ATENDIDO, TipoEventoTurno.ATENCION, "MARCAR_ATENDIDO");
+    }
+
+    @Transactional
+    public TurnoResponse marcarAusente(Long id) {
+        return cambiarEstadoFinal(id, EstadoTurno.AUSENTE, TipoEventoTurno.AUSENCIA, "MARCAR_AUSENTE");
     }
 
     @Transactional(readOnly = true)
     public TurnoResponse obtener(Long id) {
         return TurnoResponse.from(obtenerEntidad(id));
+    }
+
+    private TurnoResponse cambiarEstadoFinal(Long id,
+                                             EstadoTurno nuevoEstado,
+                                             TipoEventoTurno tipoEvento,
+                                             String accionAuditoria) {
+        Turno turno = obtenerEntidad(id);
+        validarTurnoActivo(turno);
+
+        if (turno.getInicio().isAfter(LocalDateTime.now())) {
+            throw new BadRequestException("No se puede registrar el resultado antes del horario del turno");
+        }
+
+        turno.setEstado(nuevoEstado);
+        turnoRepository.save(turno);
+
+        registrarEvento(
+                turno,
+                tipoEvento,
+                turno.getFranja().getId(),
+                turno.getFranja().getId(),
+                nuevoEstado == EstadoTurno.ATENDIDO ? "Paciente atendido" : "Paciente ausente"
+        );
+
+        auditoriaService.registrar(
+                accionAuditoria,
+                "Turno",
+                turno.getId(),
+                "estado=" + nuevoEstado
+        );
+
+        return TurnoResponse.from(turno);
     }
 
     private Turno obtenerEntidad(Long id) {
