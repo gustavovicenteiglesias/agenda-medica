@@ -1,6 +1,8 @@
 package ar.com.agendamedica.controller;
 
+import ar.com.agendamedica.dto.CancelarTurnoRequest;
 import ar.com.agendamedica.dto.CrearTurnoRequest;
+import ar.com.agendamedica.dto.ReprogramarTurnoRequest;
 import ar.com.agendamedica.dto.TurnoResponse;
 import ar.com.agendamedica.service.TurnoService;
 import jakarta.validation.Valid;
@@ -25,5 +27,19 @@ public class TurnoController {
     @GetMapping("/{id}")
     public TurnoResponse obtener(@PathVariable Long id) {
         return turnoService.obtener(id);
+    }
+
+    @PostMapping("/{id}/cancelacion")
+    public TurnoResponse cancelar(
+            @PathVariable Long id,
+            @Valid @RequestBody CancelarTurnoRequest request) {
+        return turnoService.cancelar(id, request);
+    }
+
+    @PostMapping("/{id}/reprogramacion")
+    public TurnoResponse reprogramar(
+            @PathVariable Long id,
+            @Valid @RequestBody ReprogramarTurnoRequest request) {
+        return turnoService.reprogramar(id, request);
     }
 }
