@@ -13,10 +13,14 @@ Base path: `/api`
 ## Agenda
 
 - `GET /api/agenda?profesionalId={id}&fecha=YYYY-MM-DD`
+- `GET /api/agenda/disponibles?profesionalId={id}`
+- `GET /api/agenda/disponibles?profesionalId={id}&desde=YYYY-MM-DDTHH:mm:ss`
 - `POST /api/agenda/plantillas`
 - `POST /api/agenda/generar-franjas`
 - `POST /api/agenda/excepciones`
 - `POST /api/agenda/bloqueos`
+
+La consulta `/disponibles` devuelve únicamente franjas `LIBRE` futuras del profesional. Si `desde` no se informa, usa la fecha y hora actuales.
 
 Cierre parcial:
 
