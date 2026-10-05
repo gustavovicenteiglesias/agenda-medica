@@ -36,7 +36,7 @@ public class SecurityConfig {
                                 "/v3/api-docs/**"
                         ).permitAll()
 
-                        .requestMatchers("/api/auditoria/**")
+                        .requestMatchers("/api/auditoria/**", "/api/usuarios/**")
                         .hasRole("ADMIN")
 
                         .requestMatchers(HttpMethod.POST,
