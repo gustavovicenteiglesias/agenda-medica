@@ -11,66 +11,80 @@ Sistema web para la gestión de agenda y turnos médicos.
 - Seguridad: Spring Security (JWT pendiente)
 - API: REST + OpenAPI/Swagger
 
-## Estructura
+## Estado actual
+
+El backend ya cubre prácticamente todo el núcleo operativo del MVP:
+
+- CRUD y búsqueda de pacientes con baja lógica.
+- Agenda diaria por profesional.
+- Plantillas semanales de disponibilidad.
+- Generación/materialización idempotente de franjas.
+- Excepciones de agenda: aperturas y cierres.
+- Bloqueos de franjas libres sin borrar turnos existentes.
+- Identificación de turnos afectados por un cierre.
+- Creación transaccional de turnos.
+- Prevención de doble reserva con bloqueo pesimista.
+- Cancelación con liberación de franja.
+- Reprogramación con trazabilidad de franja anterior y nueva.
+- Estados ATENDIDO y AUSENTE sólo desde el horario del turno.
+- Registro de eventos del turno.
+- Auditoría mínima de operaciones críticas.
+- Seed de desarrollo mediante perfil `dev`.
+- CI para compilar backend y frontend.
+
+## Endpoints principales
 
 ```text
-agenda-medica/
-├── frontend/
-├── backend/
-├── docs/
-├── .gitignore
-└── README.md
-```
+GET    /api/pacientes?query=
+GET    /api/pacientes/{id}
+POST   /api/pacientes
+PUT    /api/pacientes/{id}
+DELETE /api/pacientes/{id}
 
-## Dominio inicial
+GET  /api/agenda?profesionalId=1&fecha=YYYY-MM-DD
+POST /api/agenda/plantillas
+POST /api/agenda/generar-franjas
+POST /api/agenda/excepciones
+POST /api/agenda/bloqueos
 
-El backend contiene las entidades y repositorios base del MVP:
-
-- Usuario
-- Paciente
-- Profesional
-- PlantillaDisponibilidad
-- ExcepcionAgenda
-- Franja
-- Turno
-- TurnoEvento
-- Auditoria
-
-## Primer flujo vertical implementado
-
-Ya está disponible el circuito inicial:
-
-1. Crear y buscar pacientes.
-2. Consultar la agenda diaria de un profesional.
-3. Crear un turno sobre una franja libre.
-4. Bloquear la franja durante la confirmación con `PESSIMISTIC_WRITE`.
-5. Revalidar disponibilidad dentro de la transacción.
-6. Marcar la franja como `OCUPADA`.
-7. Registrar un `TurnoEvento` de creación.
-8. Responder `409 Conflict` si la franja dejó de estar disponible.
-
-Endpoints principales:
-
-```text
-GET  /api/pacientes?query=
-POST /api/pacientes
-GET  /api/agenda?profesionalId=1&fecha=2026-09-16
 POST /api/turnos
 GET  /api/turnos/{id}
+POST /api/turnos/{id}/cancelacion
+POST /api/turnos/{id}/reprogramacion
+POST /api/turnos/{id}/atencion
+POST /api/turnos/{id}/ausencia
+
+GET /api/auditoria
 ```
 
 Swagger queda disponible en `/swagger-ui.html` al levantar el backend.
 
-> Seguridad: durante esta etapa los endpoints se encuentran abiertos para facilitar las pruebas del flujo inicial. La autenticación JWT y los roles ADMIN, RECEPCION y MEDICO se implementarán antes de cerrar el MVP.
+## Desarrollo local
 
-## Próximos pasos
+La conexión por defecto espera MySQL en:
 
-- Generación/materialización de franjas desde la plantilla semanal.
-- Cancelación de turnos y liberación de franjas.
-- Reprogramación transaccional con historial.
-- Login JWT y autorización por roles.
-- Integración del frontend React con la agenda real.
+```text
+jdbc:mysql://localhost:3306/agenda_medica
+usuario: root
+password: root
+```
 
-## Alcance del MVP
+Se puede modificar con `DB_URL`, `DB_USER` y `DB_PASSWORD`.
 
-El MVP se concentra en pacientes, disponibilidad, agenda, asignación/cancelación/reprogramación de turnos, excepciones y auditoría mínima. No incluye historia clínica, facturación, WhatsApp ni multi-profesional operativo en esta etapa.
+Para cargar datos mínimos:
+
+```bash
+SPRING_PROFILES_ACTIVE=dev mvn spring-boot:run
+```
+
+## Pendiente para cerrar el MVP
+
+- Login JWT y autorización por roles ADMIN, RECEPCION y MEDICO.
+- Integración real del frontend React con la API.
+- Tests de integración y concurrencia.
+
+> Durante el desarrollo los endpoints permanecen temporalmente abiertos. No es una configuración de producción.
+
+## Alcance
+
+El MVP se concentra en pacientes, disponibilidad, agenda, asignación/cancelación/reprogramación de turnos, excepciones y auditoría mínima. No incluye historia clínica, facturación, WhatsApp ni multi-profesional operativo.

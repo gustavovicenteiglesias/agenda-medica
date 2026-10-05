@@ -15,6 +15,7 @@ import java.util.Optional;
 public interface FranjaRepository extends JpaRepository<Franja, Long> {
     List<Franja> findByProfesionalIdAndInicioBetweenOrderByInicioAsc(Long profesionalId, LocalDateTime desde, LocalDateTime hasta);
     List<Franja> findByProfesionalIdAndEstadoAndInicioGreaterThanEqualOrderByInicioAsc(Long profesionalId, EstadoFranja estado, LocalDateTime desde);
+    boolean existsByProfesionalIdAndInicio(Long profesionalId, LocalDateTime inicio);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select f from Franja f where f.id = :id")

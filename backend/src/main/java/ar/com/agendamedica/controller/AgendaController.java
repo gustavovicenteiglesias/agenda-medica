@@ -1,8 +1,10 @@
 package ar.com.agendamedica.controller;
 
-import ar.com.agendamedica.dto.FranjaResponse;
+import ar.com.agendamedica.dto.*;
 import ar.com.agendamedica.service.AgendaService;
+import jakarta.validation.Valid;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -23,4 +25,32 @@ public class AgendaController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fecha) {
         return agendaService.agendaDiaria(profesionalId, fecha);
     }
+
+    @PostMapping("/plantillas")
+    @ResponseStatus(HttpStatus.CREATED)
+    public PlantillaDisponibilidadResponse crearPlantilla(
+            @Valid @RequestBody PlantillaDisponibilidadRequest request) {
+        return agendaService.crearPlantilla(request);
+    }
+
+    @PostMapping("/generar-franjas")
+    public GenerarFranjasResponse generarFranjas(
+            @Valid @RequestBody GenerarFranjasRequest request) {
+        return agendaService.generarFranjas(request);
+    }
+
+    @PostMapping("/excepciones")
+    @ResponseStatus(HttpStatus.CREATED)
+    public ExcepcionAgendaResponse crearExcepcion(
+            @Valid @RequestBody ExcepcionAgendaRequest request) {
+        return agendaService.crearExcepcion(request);
+    }
+
+    @PostMapping("/bloqueos")
+    @ResponseStatus(HttpStatus.CREATED)
+    public ExcepcionAgendaResponse crearBloqueo(
+            @Valid @RequestBody BloqueoAgendaRequest request) {
+        return agendaService.crearBloqueo(request);
+    }
 }
+

@@ -1,55 +1,63 @@
-# API REST inicial
+# API REST
 
 Base path: `/api`
 
-## Endpoints implementados
+## Pacientes
 
-### Pacientes
+- `GET /api/pacientes?query=`
+- `GET /api/pacientes/{id}`
+- `POST /api/pacientes`
+- `PUT /api/pacientes/{id}`
+- `DELETE /api/pacientes/{id}` — baja lógica
 
-- `GET /api/pacientes?query=`: busca por DNI exacto o por apellido.
-- `POST /api/pacientes`: crea un paciente. Devuelve `201 Created`.
+## Agenda
 
-### Agenda
+- `GET /api/agenda?profesionalId={id}&fecha=YYYY-MM-DD`
+- `POST /api/agenda/plantillas`
+- `POST /api/agenda/generar-franjas`
+- `POST /api/agenda/excepciones`
+- `POST /api/agenda/bloqueos`
 
-- `GET /api/agenda?profesionalId={id}&fecha=YYYY-MM-DD`: devuelve las franjas del profesional para ese día.
-
-### Turnos
-
-- `POST /api/turnos`: crea un turno sobre una franja libre. Devuelve `201 Created`.
-- `GET /api/turnos/{id}`: consulta un turno.
-
-La creación de turno bloquea la fila de la franja con `PESSIMISTIC_WRITE`, vuelve a validar su estado dentro de la transacción y responde `409 Conflict` si dejó de estar disponible. También marca la franja como `OCUPADA` y crea un `TurnoEvento` de tipo `CREACION`.
-
-### Ejemplo de creación de turno
+Cierre parcial:
 
 ```json
 {
-  "pacienteId": 1,
-  "franjaId": 10,
-  "motivoConsulta": "Control"
+  "profesionalId": 1,
+  "fecha": "2026-10-10",
+  "horaInicio": "10:00",
+  "horaFin": "12:00",
+  "tipo": "CIERRE",
+  "motivo": "Reunión"
 }
 ```
 
-## Manejo de errores implementado
+Una apertura requiere además `duracionMin`. Un cierre sin horas representa el día completo. Las franjas libres alcanzadas quedan `BLOQUEADA`; los turnos activos no se eliminan y sus IDs se devuelven en `turnosAfectados`.
 
-- `400 Bad Request`: datos inválidos o intento de reservar una franja pasada.
-- `404 Not Found`: paciente, profesional, franja o turno inexistente.
-- `409 Conflict`: DNI duplicado, paciente inactivo o franja no disponible.
+## Turnos
 
-Las respuestas de error usan un cuerpo JSON uniforme con timestamp, status, mensaje, path y errores de validación cuando corresponde.
-
-## Endpoints previstos para las siguientes iteraciones
-
-- `POST /api/auth/login`
-- `GET /api/pacientes/{id}`
-- `PUT /api/pacientes/{id}`
-- `DELETE /api/pacientes/{id}` (baja lógica)
-- `GET /api/agenda/disponibles?desde=&hasta=`
-- `POST /api/agenda/excepciones`
-- `POST /api/agenda/bloqueos`
+- `POST /api/turnos`
+- `GET /api/turnos/{id}`
 - `POST /api/turnos/{id}/cancelacion`
 - `POST /api/turnos/{id}/reprogramacion`
+- `POST /api/turnos/{id}/atencion`
+- `POST /api/turnos/{id}/ausencia`
+
+Los estados `ATENDIDO` y `AUSENTE` sólo pueden registrarse cuando llegó o pasó la hora de inicio.
+
+La creación y la reprogramación bloquean la franja con `PESSIMISTIC_WRITE` y revalidan disponibilidad dentro de la transacción. Si otro usuario tomó la franja, la API responde `409 Conflict`.
+
+## Auditoría
+
+- `GET /api/auditoria` devuelve las últimas 100 operaciones.
+
+Actualmente se auditan creación/cancelación/reprogramación de turnos, atención/ausencia, creación de plantillas, generación de franjas y excepciones de agenda. El usuario queda nulo hasta incorporar autenticación JWT.
+
+## Errores
+
+- `400 Bad Request`: datos inválidos o regla de negocio no cumplida.
+- `404 Not Found`: recurso inexistente.
+- `409 Conflict`: DNI duplicado, turno no modificable o franja ocupada.
 
 ## Seguridad
 
-La configuración actual deja los endpoints abiertos para facilitar la construcción y prueba del flujo vertical inicial. Esto es temporal. Antes de considerar cerrado el MVP se implementará autenticación y autorización con Spring Security/JWT y roles `ADMIN`, `RECEPCION` y `MEDICO`.
+Spring Security está incorporado, pero los endpoints permanecen temporalmente abiertos para desarrollo. JWT y roles se implementarán antes de cerrar el MVP.
