@@ -62,6 +62,22 @@ public class AgendaService {
                 .toList();
     }
 
+    @Transactional(readOnly = true)
+    public List<FranjaResponse> disponibles(Long profesionalId, LocalDateTime desde) {
+        obtenerProfesional(profesionalId);
+
+        LocalDateTime inicioBusqueda = desde == null ? LocalDateTime.now() : desde;
+
+        return franjaRepository
+                .findByProfesionalIdAndEstadoAndInicioGreaterThanEqualOrderByInicioAsc(
+                        profesionalId,
+                        EstadoFranja.LIBRE,
+                        inicioBusqueda)
+                .stream()
+                .map(FranjaResponse::from)
+                .toList();
+    }
+
     @Transactional
     public PlantillaDisponibilidadResponse crearPlantilla(PlantillaDisponibilidadRequest request) {
         Profesional profesional = obtenerProfesional(request.profesionalId());
