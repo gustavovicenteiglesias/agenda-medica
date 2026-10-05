@@ -8,6 +8,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 
 @RestController
@@ -24,6 +25,14 @@ public class AgendaController {
             @RequestParam Long profesionalId,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fecha) {
         return agendaService.agendaDiaria(profesionalId, fecha);
+    }
+
+    @GetMapping("/disponibles")
+    public List<FranjaResponse> disponibles(
+            @RequestParam Long profesionalId,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime desde) {
+        return agendaService.disponibles(profesionalId, desde);
     }
 
     @PostMapping("/plantillas")
