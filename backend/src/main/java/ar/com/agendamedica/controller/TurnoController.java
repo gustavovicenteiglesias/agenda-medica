@@ -6,8 +6,12 @@ import ar.com.agendamedica.dto.ReprogramarTurnoRequest;
 import ar.com.agendamedica.dto.TurnoResponse;
 import ar.com.agendamedica.service.TurnoService;
 import jakarta.validation.Valid;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
+
+import java.time.LocalDate;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/turnos")
@@ -16,6 +20,13 @@ public class TurnoController {
 
     public TurnoController(TurnoService turnoService) {
         this.turnoService = turnoService;
+    }
+
+    @GetMapping
+    public List<TurnoResponse> listar(
+            @RequestParam Long profesionalId,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fecha) {
+        return turnoService.listarPorProfesionalYFecha(profesionalId, fecha);
     }
 
     @PostMapping
