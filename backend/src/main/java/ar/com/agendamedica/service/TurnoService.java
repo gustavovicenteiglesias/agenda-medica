@@ -20,6 +20,7 @@ import ar.com.agendamedica.repository.TurnoRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -161,6 +162,18 @@ public class TurnoService {
     @Transactional(readOnly = true)
     public TurnoResponse obtener(Long id) {
         return TurnoResponse.from(obtenerEntidad(id));
+    }
+
+    @Transactional(readOnly = true)
+    public List<TurnoResponse> listarPorProfesionalYFecha(Long profesionalId, LocalDate fecha) {
+        LocalDateTime desde = fecha.atStartOfDay();
+        LocalDateTime hasta = fecha.plusDays(1).atStartOfDay().minusNanos(1);
+
+        return turnoRepository.findByProfesionalIdAndInicioBetweenOrderByInicioAsc(
+                        profesionalId, desde, hasta)
+                .stream()
+                .map(TurnoResponse::from)
+                .toList();
     }
 
     private TurnoResponse cambiarEstadoFinal(Long id,
